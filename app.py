@@ -41,6 +41,17 @@ categories_json = {
 }
 
 def encode_image(image_data, max_size=(200, 200), quality=75):
+    """
+    Encodes an image to a base64 string.
+
+    Args:
+        image_data (bytes): The image data to encode.
+        max_size (tuple, optional): The maximum size of the image. Defaults to (200, 200).
+        quality (int, optional): The quality of the image. Defaults to 75.
+
+    Returns:
+        str: The base64 encoded image string.
+    """
     image = Image.open(BytesIO(image_data))
     
     if image.format != "JPEG":
@@ -55,6 +66,16 @@ def encode_image(image_data, max_size=(200, 200), quality=75):
 
 @app.post("/analyze-grievance/")
 async def analyze_grievance(description: str, file: UploadFile = File(...)):
+    """
+    Analyzes a grievance based on a provided image and description.
+
+    Parameters:
+        description (str): A description of the grievance.
+        file (UploadFile): An image related to the grievance.
+
+    Returns:
+        A JSON object containing the categorized issue, including category, subcategory, severity, and a preliminary response.
+    """
 
     image_data = await file.read()
     
