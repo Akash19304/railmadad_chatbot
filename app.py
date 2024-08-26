@@ -1,5 +1,4 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File
-from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import base64
 from PIL import Image
