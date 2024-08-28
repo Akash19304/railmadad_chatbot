@@ -126,3 +126,8 @@ async def analyze_grievance(description: str, file: UploadFile = File(...)):
         return content_json
 
     raise HTTPException(status_code=500, detail="No valid JSON object found in the response")
+
+
+if __name__ == "__main__":
+    import uvicorn 
+    uvicorn.run("app:app", host="127.0.0.1", port=5000, reload=True)
