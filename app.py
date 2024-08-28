@@ -82,7 +82,7 @@ async def analyze_grievance(description: str, file: UploadFile = File(...)):
     base64_image = encode_image(image_data)
 
     prompt = f"""
-    Analyze the following image and description, and categorize the issue based on the categories provided.
+    You are a grievance response chatbot created to help users, that handles grievances related to Indian Railways given by the customers. Analyze the following image and description, and categorize the issue based on the categories provided.
 
     Image (base64): "{base64_image}"
 
