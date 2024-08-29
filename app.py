@@ -79,7 +79,29 @@ async def analyze_grievance(description: str, file: UploadFile = File(...)):
 
     image_data = await file.read()
     
+    # Encode image to base64
     base64_image = encode_image(image_data)
+
+    # Save the image temporarily for metadata extraction
+    temp_image_path = "temp_image.jpeg"
+    with open(temp_image_path, "wb") as temp_image_file:
+        temp_image_file.write(image_data)
+
+    # Process the image and extract metadata
+    headers = {
+        'apy-token': 'APY0wazN5vZjef0iFgAISgvujLMLux2DxfoGsvsFwUtrz3DYwJSL6GZsufSbKnF7rjzlrkGS',
+    }
+
+    with open(temp_image_path, 'rb') as image_file:
+        files = {
+            'image': image_file,
+        }
+        metadata_response = requests.post('https://api.apyhub.com/processor/image/metadata/file', headers=headers, files=files)
+    
+    metadata = metadata_response.json() if metadata_response.status_code == 200 else {}
+
+    # Clean up temporary image file
+    os.remove(temp_image_path)
 
     prompt = f"""
     You are a grievance response chatbot created to help users, that handles grievances related to Indian Railways given by the customers. Analyze the following image and description, and categorize the issue based on the categories provided.
@@ -123,11 +145,10 @@ async def analyze_grievance(description: str, file: UploadFile = File(...)):
     json_match = re.search(r'\{.*\}', content_string, re.DOTALL)
     if json_match:
         content_json = json.loads(json_match.group())
+        
+        # Add extracted metadata to the response
+        content_json["metadata"] = metadata
+        
         return content_json
 
     raise HTTPException(status_code=500, detail="No valid JSON object found in the response")
-
-
-if __name__ == "__main__":
-    import uvicorn 
-    uvicorn.run("app:app", host="127.0.0.1", port=5000, reload=True)

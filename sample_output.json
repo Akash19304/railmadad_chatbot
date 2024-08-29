@@ -1,0 +1,34 @@
+{
+    "category": "coach-maintenance",
+    "subcategory": "window/seat broken",
+    "severity": "high",
+    "preliminary_response": "Thank you for bringing this to our attention. We understand the importance of a comfortable journey, and we will arrange for the seat to be repaired immediately.",
+    "metadata": {
+      "data": {
+        "BitsPerSample": 8,
+        "ColorComponents": 3,
+        "Directory": ".",
+        "EncodingProcess": "Progressive DCT, Huffman coding",
+        "ExifToolVersion": 12.57,
+        "FileAccessDate": "2024:08:29 17:51:59+00:00",
+        "FileInodeChangeDate": "2024:08:29 17:51:59+00:00",
+        "FileModifyDate": "2024:08:29 17:51:59+00:00",
+        "FileName": "",
+        "FilePermissions": "-rw-r--r--",
+        "FileSize": "162 kB",
+        "FileType": "JPEG",
+        "FileTypeExtension": "jpg",
+        "ImageHeight": 843,
+        "ImageSize": "1415x843",
+        "ImageWidth": 1415,
+        "JFIFVersion": 1.01,
+        "MIMEType": "image/jpeg",
+        "Megapixels": 1.2,
+        "ResolutionUnit": "None",
+        "SourceFile": "",
+        "XResolution": 1,
+        "YCbCrSubSampling": "YCbCr4:2:0 (2 2)",
+        "YResolution": 1
+      }
+    }
+  }

@@ -159,6 +159,7 @@ appmem.py
 gpt.py
 main.py
 token_usage.py
+check_metadata.py
 damage_phone.jpeg
 
 # PyCharm
