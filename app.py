@@ -152,3 +152,8 @@ async def analyze_grievance(description: str, file: UploadFile = File(...)):
         return content_json
 
     raise HTTPException(status_code=500, detail="No valid JSON object found in the response")
+
+
+## .venv\Scripts\activate
+
+## uvicorn app:app --reload
