@@ -161,6 +161,8 @@ main.py
 token_usage.py
 check_metadata.py
 damage_phone.jpeg
+lang.py
+lang_app.py
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

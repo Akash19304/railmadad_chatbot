@@ -1,27 +1,43 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import base64
+from pydantic import BaseModel, Field
 from PIL import Image
-from io import BytesIO
-import requests
-import json
-import re
+from typing import Dict, Any
+import base64
+import io
 import os
+import logging
+from langchain.chains import TransformChain
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.exceptions import OutputParserException
+from langchain_core.runnables import chain
+from dotenv import load_dotenv
 
-app = FastAPI()
+load_dotenv()
+openai_api_key = os.getenv("OPENAI_API_KEY")
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = FastAPI(
+    title="Railway Grievance API",
+    description="API for categorizing railway grievances using AI and image analysis.",
+    version="1.0",
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-openai_api_key = os.environ.get("openai_api_key")
-
 categories_json = {
-    "medical Assisance": ["medical assistance"],
+    "medical Assistance": ["medical assistance"],
     "Security": ["Eve-Teasing/Misbehaviour with lady passengers/Rape", "Theft of Passengers Belongings/Snatching", "Unauthorized person in Ladies/Disabled Coach/SLR/Reserve Coach",
                  "Harrasment/Extortion by security Personal/Railway personnel", "Nuisance by Hawkers/Beggar/Eunuch", "Luggage Left Behind/Unclaimed/Suspected Articles",
                  "Passenger Missing/Not Responding call", "Smoking/Drinking Alcohol/Narcotics", "Dacoity/Robbery/Murder/Riots", "Quarrelling/Hooliganism", 
@@ -40,120 +56,89 @@ categories_json = {
     "Bed Roll": ["Dirty/Torn", "Overcharging", "Non Availability", "Others"]
 }
 
-def encode_image(image_data, max_size=(200, 200), quality=75):
+class ImageInformation(BaseModel):
+    category: str
+    subcategory: str
+    urgency: str
+    preliminary_response: str
+
+parser = JsonOutputParser(pydantic_object=ImageInformation)
+
+def encode_and_compress_image(image: UploadFile, quality: int = 50, max_size: tuple = (100, 100)) -> str:
+    try:
+        img = Image.open(image.file)
+        img.thumbnail(max_size)
+        buffer = io.BytesIO()
+        img.save(buffer, format="JPEG", quality=quality)
+        buffer.seek(0)
+        return base64.b64encode(buffer.read()).decode("utf-8")
+    except Exception as e:
+        logger.error(f"Image processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error processing image")
+
+@chain
+def image_model(inputs: dict) -> Dict[str, Any]:
+    model = ChatOpenAI(
+        temperature=0.1,
+        model="gpt-4o-mini",
+        api_key=openai_api_key,
+    )
+
+    msg = model.invoke([
+        SystemMessage(
+            content="You are a grievance response chatbot created to help users, that handles grievances related to Indian Railways given by the customers. Analyze the following image and description, and categorize the issue based on the categories provided."
+        ),
+        HumanMessage(
+            content=[
+                {"type": "text", "text": inputs["prompt"]},
+                {"type": "text", "text": parser.get_format_instructions()},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{inputs['image']}"}
+                },
+            ]
+        )
+    ])
+
+    response_text = msg.content.strip("```json").strip("```").strip() 
+    try:
+        return parser.parse(response_text)  
+    except Exception as e:
+        logger.error(f"Failed to parse AI response: {str(e)}")
+        return {"error": "AI response parsing failed"}
+
+
+@app.post("/analyze_issue/", response_model=ImageInformation)
+async def analyze_issue(image: UploadFile = File(...), description: str = Form(...)):
     """
-    Encodes an image to a base64 string.
-
-    Args:
-        image_data (bytes): The image data to encode.
-        max_size (tuple, optional): The maximum size of the image. Defaults to (200, 200).
-        quality (int, optional): The quality of the image. Defaults to 75.
-
-    Returns:
-        str: The base64 encoded image string.
+    Upload an image and provide a description of the issue.  
+    The AI will analyze and categorize the complaint.
     """
-    image = Image.open(BytesIO(image_data))
-    
-    if image.format != "JPEG":
-        image = image.convert("RGB")
-    
-    image.thumbnail(max_size)
-    
-    buffered = BytesIO()
-    image.save(buffered, format="JPEG", quality=quality)
-    
-    return base64.b64encode(buffered.getvalue()).decode('utf-8')
-
-@app.post("/analyze-grievance/")
-async def analyze_grievance(description: str, file: UploadFile = File(...)):
-    """
-    Analyzes a grievance based on a provided image and description.
-
-    Parameters:
-        description (str): A description of the grievance.
-        file (UploadFile): An image related to the grievance.
-
-    Returns:
-        A JSON object containing the categorized issue, including category, subcategory, severity, and a preliminary response.
-    """
-
-    image_data = await file.read()
-    
-    # Encode image to base64
-    base64_image = encode_image(image_data)
-
-    # Save the image temporarily for metadata extraction
-    temp_image_path = "temp_image.jpeg"
-    with open(temp_image_path, "wb") as temp_image_file:
-        temp_image_file.write(image_data)
-
-    # Process the image and extract metadata
-    headers = {
-        'apy-token': 'APY0wazN5vZjef0iFgAISgvujLMLux2DxfoGsvsFwUtrz3DYwJSL6GZsufSbKnF7rjzlrkGS',
-    }
-
-    with open(temp_image_path, 'rb') as image_file:
-        files = {
-            'image': image_file,
-        }
-        metadata_response = requests.post('https://api.apyhub.com/processor/image/metadata/file', headers=headers, files=files)
-    
-    metadata = metadata_response.json() if metadata_response.status_code == 200 else {}
-
-    # Clean up temporary image file
-    os.remove(temp_image_path)
-
-    prompt = f"""
-    You are a grievance response chatbot created to help users, that handles grievances related to Indian Railways given by the customers. Analyze the following image and description, and categorize the issue based on the categories provided.
-
-    Image (base64): "{base64_image}"
-
-    Description: "{description}"
-
-    Categories and Subcategories:
-    {categories_json}
-
-    Return only a JSON response in this format:
-    {{
-        "category": "category_name",
-        "subcategory": "subcategory_name",
-        "severity": "high/low",
-        "preliminary_response": "Provide a brief, empathetic response that acknowledges the complaint and outlines immediate action. For example, for a dirty toilet: 'Thank you for notifying us. We will send a cleaner right away.'"
-    }}
-    """
-
-    payload = {
-        "model": "gpt-4o-mini",
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
-        "max_tokens": 300
-    }
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {openai_api_key}"
-    }
-
-    response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-
-    if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail="Error processing the request")
-
-    content_string = response.json()["choices"][0]["message"]["content"]
-
-    json_match = re.search(r'\{.*\}', content_string, re.DOTALL)
-    if json_match:
-        content_json = json.loads(json_match.group())
+    try:
+        image_base64 = encode_and_compress_image(image)
         
-        # Add extracted metadata to the response
-        content_json["metadata"] = metadata
+        vision_prompt = f"""Description: "{description}",
+        Categories and Subcategories:
+        {categories_json}
+        """
+
+        vision_chain = image_model
+        result = vision_chain.invoke(
+            {
+                "image": image_base64, 
+                "prompt": vision_prompt
+            }
+        )
+
+        if "error" in result:
+            raise HTTPException(status_code=500, detail=result["error"])
         
-        return content_json
+        return result
+    except Exception as e:
+        logger.error(f"Error processing request: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-    raise HTTPException(status_code=500, detail="No valid JSON object found in the response")
 
-
-## .venv\Scripts\activate
-
-## uvicorn app:app --reload
+@app.get("/")
+def root():
+    return {"message": "Railway Grievance API is running. Go to /docs to test."}
